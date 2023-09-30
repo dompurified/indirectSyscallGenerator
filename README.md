@@ -8,7 +8,7 @@
 1. paste your macro into the script
 1. paste output into syscalls.asm
 
-note: if you want to change the function return type and/or calling convention, use j(ret, __calling_convention, function) instead of i(function)
+note: if you want to change the function return type and/or calling convention, use j(ret, __calling_convention, function) instead of i(function)<br>
 note: you have to change lazyimporter and xorstr locations (they are optional and you can just remove the #include's)
 ⭐ please star bro, i'd appreciate it a lot
 > this project didn't take a lot to make, but i really don't want pasters ruining it. if you don't know what indirect syscalls are or how to use them, i'd recommend you to actually implement them manually
