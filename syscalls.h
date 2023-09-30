@@ -14,9 +14,11 @@ i(Close, HANDLE)\
 
 EXTERN_C_START
 #define i(f,...)DWORD sysnum_Nt##f;void* stub_Nt##f;
+#define j(f,...)i(f)
 ___initializeAllSyscalls() // sysnums && stubs
 #undef i
-#define i(f,...)long NTAPI sys##f(##__VA_ARGS__);
+#define j(r,c,f,...)r c sys##f(##__VA_ARGS__);
+#define i(...)j(long,NTAPI,##__VA_ARGS__)
 ___initializeAllSyscalls() // functions definitions
 #undef i
 EXTERN_C_END
