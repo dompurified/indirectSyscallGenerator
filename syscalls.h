@@ -14,7 +14,7 @@ i(Close, HANDLE)\
 
 EXTERN_C_START
 #define i(f,...)DWORD sysnum_Nt##f;void* stub_Nt##f;
-#define j(f,...)i(f)
+#define j(r,c,f,...)i(f)
 ___initializeAllSyscalls() // sysnums && stubs
 #undef i
 #define j(r,c,f,...)r c sys##f(##__VA_ARGS__);
@@ -59,6 +59,7 @@ SyscallInfo sys_gsi(uint8_t* function) { // note: this isnt perfect and might le
 #define l(f)f
 #endif
 #define i(f,...){auto p=(uint8_t*)l(GetProcAddress)(ntdll,s("Nt"#f));if(!p)return false;auto i=sys_gsi(p);if(!i.s||!i.n)return false;sysnum_Nt##f=i.n;stub_Nt##f=i.s;}
+#define j(r,c,f,...)i(f)
 bool initializeSyscalls() {
     auto ntdll = l(GetModuleHandleW)(s(L"ntdll.dll")); if (!ntdll)return false;
         ___initializeAllSyscalls()
@@ -69,4 +70,5 @@ bool initializeSyscalls() {
 #undef s
 #undef l
 #undef i
+#undef j
 
