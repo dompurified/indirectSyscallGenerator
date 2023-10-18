@@ -1,38 +1,58 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-
 #include <winternl.h>
+#include <stdint.h>
 
-#define ___initializeAllSyscalls()\
-i(OpenProcess, PHANDLE, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)\
-i(WriteVirtualMemory, HANDLE, void*, void*, size_t, size_t*)\
-i(ReadVirtualMemory, HANDLE, void*, void*, size_t, size_t*)\
-i(Close, HANDLE)\
+// note: some function names (like NtCreateProcess) are going to be defined as i(CreateProcess, ...)
+// however, since CreateProcess in windows.h is defined as CreateProcess[A/W], it actually turns to NtCreateProcess[A/W]
+// thus, i recommend checking your windows.h macro definitions, and if your definitions collides with a windows.h macro, 
+// #undef CreateProcess
+// #define ___initializeAllSyscalls()\ 
+// i(CreateProcess, ...)
+// #ifndef _UNICODE
+// #define CreateProcess CreateProcessA
+// #else
+// #define CreateProcess CreateProcessW
+// #endif
+
+#define INIT_SYSCALLS()\
+i(OpenProcess, PHANDLE, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)
+
+// ^^^^^^^^^^^^^^^^^^^^^^^^^^
+// your function definitions
+
+// xorstr and lazy_importer imports
+// ˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅
+#if defined(__cplusplus)
+#include "../sdk/xorstr.hpp" // change path
+#include "../sdk/lazy_importer.hpp"
+#endif
+
+// indirectSyscallGenerator code (don't change unless you know what you're doing)
+// ˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅˅
 
 #define STATUS_SUCCESS 0
 
 EXTERN_C_START
 #define i(f,...)DWORD sysnum_Nt##f;void* stub_Nt##f;
 #define j(r,c,f,...)i(f)
-___initializeAllSyscalls() // sysnums && stubs
+INIT_SYSCALLS() // sysnums && stubs
 #undef i
-#define j(r,c,f,...)r c sys##f(##__VA_ARGS__);
-#define i(...)j(long,NTAPI,##__VA_ARGS__)
-___initializeAllSyscalls() // functions definitions
+#undef j
+#define j(ret, convention, func, ...) ret convention sys##func(##__VA_ARGS__);
+#define i(func, ...) j(long /* NTSTATUS */, NTAPI /* __stdcall*/, func, ##__VA_ARGS__)
+INIT_SYSCALLS() // functions definitions
 #undef i
+#undef j
 EXTERN_C_END
 
 // syscall info
-#if defined(__cplusplus)
-#include "../sdk/xorstr.hpp" // change path
-#include "../sdk/lazy_importer.hpp"
-#endif
 typedef struct SyscallInfo {
-    DWORD n;
-    void* s;
+    DWORD sysnum;
+    void* stub;
 } SyscallInfo;
-SyscallInfo sys_gsi(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
+SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
     uint32_t sysnum{};
     uint8_t* stub{};
     for (uint8_t i = 0; i < 100; ++i, ++function) {
@@ -49,26 +69,130 @@ SyscallInfo sys_gsi(uint8_t* function) { // note: this isnt perfect and might le
 
 
 #ifdef _
-#define s(z)_(z)
+#define xorstring_or_string(string) _(string)
+#elif defined(xorstr_)
+#define xorstring_or_string(string) xorstr_(string)
 #else
-#define s(z)z
+#define xorstring_or_string(string) string
 #endif
 #ifdef LI_FN
-#define l(f)LI_FN(f)
+#define li_fn_or_fn(func) LI_FN(func)
 #else
-#define l(f)f
+#define li_fn_or_fn(func) func
 #endif
-#define i(f,...){auto p=(uint8_t*)l(GetProcAddress)(ntdll,s("Nt"#f));if(!p)return false;auto i=sys_gsi(p);if(!i.s||!i.n)return false;sysnum_Nt##f=i.n;stub_Nt##f=i.s;}
-#define j(r,c,f,...)i(f)
-bool initializeSyscalls() {
-    auto ntdll = l(GetModuleHandleW)(s(L"ntdll.dll")); if (!ntdll)return false;
-        ___initializeAllSyscalls()
-    return true;
+// before, this macro was a complete mess. i don't exactly know why i chose to do it like it, but i decided to change it
+#define i(func,...) {\
+    auto ntdllFunc = (uint8_t*)GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func));\
+    if (!ntdllFunc) return 0;\
+    auto info = getSyscallInfo(ntdllFunc);\
+if (!info.stub || !info.sysnum) return 0; \
+    sysnum_Nt##func = info.sysnum; stub_Nt##func = info.stub;\
+}
+#define j(ret,convention,func,...) i(func)
+
+// get module base && function base from peb
+#if defined(__cplusplus)
+extern "C" TEB * get_teb_x64();
+extern "C" TEB * get_teb_x86();
+#if defined(_WIN64)
+#define get_teb get_teb_x64
+#else
+#define get_teb get_teb_x86
+#endif
+#include <vector>
+#include <string_view>
+#include <optional>
+
+std::wstring_view get_file_name(const std::wstring_view& path) {
+	return path.substr(path.find_last_of(L'\\') + 1);
+}
+
+std::vector<const LDR_DATA_TABLE_ENTRY*> get_loader_table_entries(const PEB* const p_peb) {
+	std::vector<const LDR_DATA_TABLE_ENTRY*> entries;
+
+	for (const LIST_ENTRY* p_current_entry{ &p_peb->Ldr->InMemoryOrderModuleList };;) {
+		p_current_entry = p_current_entry->Flink;
+		if (p_current_entry == &p_peb->Ldr->InMemoryOrderModuleList)
+			break;
+
+		const LDR_DATA_TABLE_ENTRY* const p_module_entry{ CONTAINING_RECORD(p_current_entry, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks) };
+		entries.push_back(p_module_entry);
+	}
+
+	return entries;
+}
+
+class c_function {
+public:
+	const char* const name;
+	const std::uint8_t* const address;
+};
+std::optional<std::vector<c_function>> get_eat_functions(const std::uint8_t* const module) {
+	const auto p_dos_headers{ reinterpret_cast<const IMAGE_DOS_HEADER*>(module) };
+	if (p_dos_headers->e_magic != IMAGE_DOS_SIGNATURE)
+		return std::nullopt;
+	const auto p_nt_headers{ reinterpret_cast<const IMAGE_NT_HEADERS*>(module + p_dos_headers->e_lfanew) };
+	if (p_nt_headers->Signature != IMAGE_NT_SIGNATURE)
+		return std::nullopt;
+
+
+	const auto p_eat{ reinterpret_cast<const IMAGE_EXPORT_DIRECTORY*>(module + p_nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress) };
+	const auto address_of_names{ reinterpret_cast<const std::uint32_t*>(module + p_eat->AddressOfNames) };
+	const auto address_of_functions{ reinterpret_cast<const std::uint32_t*>(module + p_eat->AddressOfFunctions) };
+	const auto address_of_ordinals{ reinterpret_cast<const std::uint16_t*>(module + p_eat->AddressOfNameOrdinals) };
+
+	std::vector<c_function> functions;
+	for (std::uint32_t i{}; i < p_eat->NumberOfNames; ++i) {
+		const auto name{ reinterpret_cast<const char*>(module + address_of_names[i]) };
+		const std::uint16_t ordinal{ address_of_ordinals[i] };
+		const std::uint8_t* const p_function{ reinterpret_cast<const uint8_t*>(module + address_of_functions[ordinal]) };
+
+		functions.push_back({
+			.name = name,
+			.address = p_function,
+			});
+	}
+
+	return functions;
+}
+const std::uint8_t* get_function_by_name(const std::uint8_t* const module, const std::string_view name) {
+	const std::optional<std::vector<c_function>> functions = get_eat_functions(module);
+	if (!functions)
+		return nullptr;
+	for (const c_function& function : *functions) {
+		if (name.compare(function.name) == 0)
+			return function.address;
+	}
+
+	return nullptr;
+}
+
+std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& module_name) {
+	for (const LDR_DATA_TABLE_ENTRY* p_entry : get_loader_table_entries(p_peb)) {
+		const std::wstring file_name{ get_file_name(p_entry->FullDllName.Buffer) };
+		if (module_name.compare(file_name) == 0) {
+			return reinterpret_cast<std::uint8_t*>(p_entry->DllBase);
+		}
+	}
+
+	return nullptr;
+}
+#define GET_MODULE_BASE(name) get_module_base(get_teb()->ProcessEnvironmentBlock, name)
+#define GET_FUNC_ADDR(module, name) get_function_by_name(module, name)
+#else
+#define GET_MODULE_BASE(name) (uint8_t*)li_fn_or_fn(GetModuleHandleW)(name)
+#define GET_FUNC_ADDR(module, name) (uint8_t*)li_fn_or_fn(GetProcAddress)((HMODULE)module, name)
+#endif
+
+
+bool init_syscalls() {
+    auto ntdll = GET_MODULE_BASE(xorstring_or_string(TEXT("ntdll.dll"))); if (!ntdll) return 0;\
+        INIT_SYSCALLS()\
+        return 1;\
 }
 
 
-#undef s
-#undef l
+#undef xorstring_or_string
+#undef li_fn_or_fn
 #undef i
 #undef j
-
