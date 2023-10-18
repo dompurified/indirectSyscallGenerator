@@ -186,7 +186,7 @@ std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& m
 
 
 bool init_syscalls() {
-    auto ntdll = GET_MODULE_BASE(xorstring_or_string(TEXT("ntdll.dll"))); if (!ntdll) return 0;\
+    auto ntdll = GET_MODULE_BASE(xorstring_or_string(L"ntdll.dll")); if (!ntdll) return 0;\
         INIT_SYSCALLS()\
         return 1;\
 }
