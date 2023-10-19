@@ -8,7 +8,7 @@
 // however, since CreateProcess in windows.h is defined as CreateProcess[A/W], it actually turns to NtCreateProcess[A/W]
 // thus, i recommend checking your windows.h macro definitions, and if your definitions collides with a windows.h macro, 
 // #undef CreateProcess
-// #define ___initializeAllSyscalls()\ 
+// #define INIT_SYSCALLS()\ 
 // i(CreateProcess, ...)
 // #ifndef _UNICODE
 // #define CreateProcess CreateProcessA
