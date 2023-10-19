@@ -156,7 +156,7 @@ std::optional<std::vector<c_function>> get_eat_functions(const std::uint8_t* con
 	return functions;
 }
 const std::uint8_t* get_function_by_name(const std::uint8_t* const module, const std::string_view name) {
-	const std::optional<std::vector<c_function>> functions = get_eat_functions(module);
+	const std::optional<std::vector<c_function>> functions{ get_eat_functions(module) };
 	if (!functions)
 		return nullptr;
 	for (const c_function& function : *functions) {
