@@ -166,36 +166,20 @@ std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& m
 #define GET_FUNC_ADDR(module, name) (uint8_t*)li_fn_or_fn(GetProcAddress)((HMODULE)module, name)
 #endif
 
-// syscall info
-typedef struct c_syscall_info {
-    DWORD sysnum;
-    void* stub;
-} c_syscall_info;
-
-c_syscall_info get_syscall_info(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
-    uint32_t sysnum{};
-    uint8_t* stub{};
-    for (uint8_t i = 0; i < 100; ++i, ++function) {
-        if (*function == 0xB8) sysnum = *(DWORD*)(function + 1);
-        if (*function == 0x0F && function[1] == 0x05) stub = function;
-        if (stub && sysnum) break;
-    }
-
-    return c_syscall_info{
-        sysnum,
-        stub,
-    };
-}
-
 // before, this macro was a complete mess. i don't exactly know why i chose to do it like it, but i decided to change it
 #define i(func,...) {\ // 									  "NtOpenProcess"
-    auto ntdllFunc = GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func)); \ // ntdll!NtOpenProcess
-    if (!ntdllFunc) return 0; \ // false
-    c_syscall_info syscall_info = get_syscall_info(ntdllFunc); \
-	if (!syscall_info.stub || !syscall_info.sysnum) \
-		return 0; \ // false
-    sysnum_Nt##func = info.sysnum;\ // sysnum_NtOpenProcess = 0x123;
-	stub_Nt##func = info.stub;\		// stub_NtOpenProcess = ntdll!NtOpenProcess + 0x123;
+    auto ntdll_func = GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func)); \ // ntdll!NtOpenProcess
+    if (!ntdll_func) return 0; \ // false
+	uint8_t sig1[] = { 0x4C, 0x8B, 0xD1, 0xB8 }; \ // (mov r10, rcx) (mov eax, ...)
+	if (memcmp(ntdll_func, sig1, sizeof(sig1)) != 0) \
+		return 0;\ // false
+	auto sysnum = *(DWORD*)ntdll_func + 0x4; \
+	auto stub = ntdll_func + 0x12; \
+	uint8_t sig2[] = { 0x0F, 0x05, 0xC3 }; \ // syscall ret
+	if (memcmp(ntdll_func + 0x12, sig2, sizeof(sig2)) != 0) \
+		return 0; \ 
+    sysnum_Nt##func = sysnum; \ // sysnum_NtOpenProcess = 0x123;
+	stub_Nt##func = stub; \		// stub_NtOpenProcess = ntdll!NtOpenProcess + 0x123;
 }
 #define j(ret, convention, func,...) i(func)
 
