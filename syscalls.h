@@ -181,7 +181,7 @@ c_syscall_info get_syscall_info(uint8_t* function) { // note: this isnt perfect 
         if (stub && sysnum) break;
     }
 
-    return SyscallInfo{
+    return c_syscall_info{
         sysnum,
         stub,
     };
