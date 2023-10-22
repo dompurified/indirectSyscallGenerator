@@ -167,12 +167,12 @@ std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& m
 #endif
 
 // syscall info
-typedef struct SyscallInfo {
+typedef struct c_syscall_info {
     DWORD sysnum;
     void* stub;
-} SyscallInfo;
+} c_syscall_info;
 
-SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
+c_syscall_info get_syscall_info(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
     uint32_t sysnum{};
     uint8_t* stub{};
     for (uint8_t i = 0; i < 100; ++i, ++function) {
@@ -191,7 +191,7 @@ SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and m
 #define i(func,...) {\ // 									  "NtOpenProcess"
     auto ntdllFunc = GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func)); \ // ntdll!NtOpenProcess
     if (!ntdllFunc) return 0; \ // false
-    auto syscall_info = getSyscallInfo(ntdllFunc); \
+    c_syscall_info syscall_info = get_syscall_info(ntdllFunc); \
 	if (!syscall_info.stub || !syscall_info.sysnum) \
 		return 0; \ // false
     sysnum_Nt##func = info.sysnum;\ // sysnum_NtOpenProcess = 0x123;
