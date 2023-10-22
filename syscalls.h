@@ -58,28 +58,6 @@ INIT_SYSCALLS()
 #undef j
 EXTERN_C_END
 
-// syscall info
-typedef struct SyscallInfo {
-    DWORD sysnum;
-    void* stub;
-} SyscallInfo;
-
-SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
-    uint32_t sysnum{};
-    uint8_t* stub{};
-    for (uint8_t i = 0; i < 100; ++i, ++function) {
-        if (*function == 0xB8) sysnum = *(DWORD*)(function + 1);
-        if (*function == 0x0F && function[1] == 0x05) stub = function;
-        if (stub && sysnum) break;
-    }
-
-    return SyscallInfo{
-        sysnum,
-        stub,
-    };
-}
-
-
 // make using xorstr/lazyimporter optional
 #ifdef _
 #define xorstring_or_string(string) _(string)
@@ -187,6 +165,27 @@ std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& m
 #define GET_MODULE_BASE(name) (uint8_t*)li_fn_or_fn(GetModuleHandleW)(name)
 #define GET_FUNC_ADDR(module, name) (uint8_t*)li_fn_or_fn(GetProcAddress)((HMODULE)module, name)
 #endif
+
+// syscall info
+typedef struct SyscallInfo {
+    DWORD sysnum;
+    void* stub;
+} SyscallInfo;
+
+SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
+    uint32_t sysnum{};
+    uint8_t* stub{};
+    for (uint8_t i = 0; i < 100; ++i, ++function) {
+        if (*function == 0xB8) sysnum = *(DWORD*)(function + 1);
+        if (*function == 0x0F && function[1] == 0x05) stub = function;
+        if (stub && sysnum) break;
+    }
+
+    return SyscallInfo{
+        sysnum,
+        stub,
+    };
+}
 
 // before, this macro was a complete mess. i don't exactly know why i chose to do it like it, but i decided to change it
 #define i(func,...) {\ // 									  "NtOpenProcess"
