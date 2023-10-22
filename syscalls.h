@@ -17,7 +17,7 @@
 // #endif
 
 #define INIT_SYSCALLS()\
-i(OpenProcess, PHANDLE, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)
+i(OpenProcess, HANDLE*, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)
 
 // ^^^^^^^^^^^^^^^^^^^^^^^^^^
 // your function definitions
