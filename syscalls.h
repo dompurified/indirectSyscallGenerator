@@ -35,14 +35,25 @@ i(OpenProcess, HANDLE*, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)
 #define STATUS_SUCCESS 0
 
 EXTERN_C_START
-#define i(f,...)DWORD sysnum_Nt##f;void* stub_Nt##f;
-#define j(r,c,f,...)i(f)
-INIT_SYSCALLS() // sysnums && stubs
+// global vars with syscall nums && syscall stubs
+#define i(func,...) DWORD sysnum_Nt##func;\
+					void* stub_Nt##func; 	// DWORD sysnum_NtOpenProcess; 	// 0x123
+										 	// void* stub_NtOpenProcess; 	// ntdll!NtOpenProcess + 0x123
+
+#define j(ret, convention, func, ...) i(func)
+
+INIT_SYSCALLS()
+
 #undef i
 #undef j
-#define j(ret, convention, func, ...) ret convention sys##func(##__VA_ARGS__);
+
+// function defs
+
+#define j(ret, convention, func, ...) ret convention sys##func(##__VA_ARGS__); // NTSTATUS NTAPI sysOpenProcess(HANDLE*, ACCESS_MASK, OBJECT_ATTRIBUTES*, CLIENT_ID*)
 #define i(func, ...) j(long /* NTSTATUS */, NTAPI /* __stdcall*/, func, ##__VA_ARGS__)
-INIT_SYSCALLS() // functions definitions
+
+INIT_SYSCALLS()
+
 #undef i
 #undef j
 EXTERN_C_END
@@ -52,6 +63,7 @@ typedef struct SyscallInfo {
     DWORD sysnum;
     void* stub;
 } SyscallInfo;
+
 SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and might lead to false positives, doesnt really matter most of the time in ntdll cuz the functions are so small
     uint32_t sysnum{};
     uint8_t* stub{};
@@ -68,6 +80,7 @@ SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and m
 }
 
 
+// make using xorstr/lazyimporter optional
 #ifdef _
 #define xorstring_or_string(string) _(string)
 #elif defined(xorstr_)
@@ -80,20 +93,11 @@ SyscallInfo getSyscallInfo(uint8_t* function) { // note: this isnt perfect and m
 #else
 #define li_fn_or_fn(func) func
 #endif
-// before, this macro was a complete mess. i don't exactly know why i chose to do it like it, but i decided to change it
-#define i(func,...) {\
-    auto ntdllFunc = (uint8_t*)GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func));\
-    if (!ntdllFunc) return 0;\
-    auto info = getSyscallInfo(ntdllFunc);\
-if (!info.stub || !info.sysnum) return 0; \
-    sysnum_Nt##func = info.sysnum; stub_Nt##func = info.stub;\
-}
-#define j(ret,convention,func,...) i(func)
 
 // get module base && function base from peb
 #if defined(__cplusplus)
-extern "C" TEB * get_teb_x64();
-extern "C" TEB * get_teb_x86();
+extern "C" TEB* get_teb_x64();
+extern "C" TEB* get_teb_x86();
 #if defined(_WIN64)
 #define get_teb get_teb_x64
 #else
@@ -184,11 +188,24 @@ std::uint8_t* get_module_base(const PEB* const p_peb, const std::wstring_view& m
 #define GET_FUNC_ADDR(module, name) (uint8_t*)li_fn_or_fn(GetProcAddress)((HMODULE)module, name)
 #endif
 
+// before, this macro was a complete mess. i don't exactly know why i chose to do it like it, but i decided to change it
+#define i(func,...) {\ // 									  "NtOpenProcess"
+    auto ntdllFunc = GET_FUNC_ADDR(ntdll, xorstring_or_string("Nt" #func)); \ // ntdll!NtOpenProcess
+    if (!ntdllFunc) return 0; \ // false
+    auto syscall_info = getSyscallInfo(ntdllFunc); \
+	if (!syscall_info.stub || !syscall_info.sysnum) \
+		return 0; \ // false
+    sysnum_Nt##func = info.sysnum;\ // sysnum_NtOpenProcess = 0x123;
+	stub_Nt##func = info.stub;\		// stub_NtOpenProcess = ntdll!NtOpenProcess + 0x123;
+}
+#define j(ret, convention, func,...) i(func)
 
 bool init_syscalls() {
-    auto ntdll = GET_MODULE_BASE(xorstring_or_string(L"ntdll.dll")); if (!ntdll) return 0;\
-        INIT_SYSCALLS()\
-        return 1;\
+    auto ntdll = GET_MODULE_BASE(xorstring_or_string(L"ntdll.dll")); \
+	if (!ntdll) \
+		return 0; \ // false
+	INIT_SYSCALLS() \
+    return 1; \ // true
 }
 
 
