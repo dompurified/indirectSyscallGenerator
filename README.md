@@ -1,5 +1,6 @@
 # indirect syscall generator
-`main.cpp` ```cpp
+`main.cpp`
+```cpp
 int main() {
     if (!initSyscalls()) {
         std::println("[!] failed to initialize syscalls");
