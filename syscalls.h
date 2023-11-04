@@ -33,13 +33,11 @@ extern "C" {
 #undef i
 #undef j
 
-		// function defs
+	// function defs
 
-										// long __stdcall sysOpenProcess(...)
-#define j(ret, convention, func, ...)	ret convention sys##func(##__VA_ARGS__);
-
-						// long/NTSTATUS, __stdcall/NTAPI
-#define i(func, ...)	j(long, __stdcall, func, ##__VA_ARGS__)
+													//	long 	__stdcall 	sysOpenProcess(...)
+#define 				j(ret, 	convention, func, ...)	ret		convention 	sys##func(##__VA_ARGS__);
+#define i(func, ...) 	j(long, __stdcall, 	func, ##__VA_ARGS__)
 
 	INIT_SYSCALLS()
 
@@ -53,11 +51,13 @@ extern "C" {
 const std::uint8_t* getExportAddress(const std::uint8_t* const module, const std::string_view exportName) {
 	// check header signatures
 	const auto pDosHeaders{ reinterpret_cast<const IMAGE_DOS_HEADER*>(module) };
-	if (pDosHeaders->e_magic != IMAGE_DOS_SIGNATURE)
+	if (pDosHeaders->e_magic != IMAGE_DOS_SIGNATURE) {
 		return nullptr;
+	}
 	const auto pNtHeaders{ reinterpret_cast<const IMAGE_NT_HEADERS*>(module + pDosHeaders->e_lfanew) };
-	if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE)
+	if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE) {
 		return nullptr;
+	}
 
 
 	// get eat address
@@ -129,8 +129,9 @@ inline TEB* getTeb() { return reinterpret_cast<TEB*>(__readgsqword(0x30)); };
 
 bool initSyscalls() {
 	const std::uint8_t* const ntdll{ getModuleBase(getTeb()->ProcessEnvironmentBlock, STRING_OBFUSCATE(L"C:\\Windows\\SYSTEM32\\ntdll.dll")) };
-	if (!ntdll)
+	if (!ntdll) {
 		return false;
+	}
 
 	INIT_SYSCALLS();
 
