@@ -71,7 +71,7 @@ const std::uint8_t* getExportAddress(const std::uint8_t* const module, const std
 	for (std::uint32_t i{}; i < pEat->NumberOfNames; ++i) {
 		const auto name{						reinterpret_cast<const char*>(module + pNames[i]) };
 		const std::uint16_t ordinal{			pOrdinals[i] };
-		const std::uint8_t* const pFunction{	reinterpret_cast<const uint8_t*>(module + pFunctions[ordinal]) };
+		const std::uint8_t* const pFunction{	reinterpret_cast<const std::uint8_t*>(module + pFunctions[ordinal]) };
 
 		if (exportName.compare(name) == 0) {
 			return pFunction;
