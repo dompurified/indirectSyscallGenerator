@@ -12,14 +12,14 @@ int main() {
     HANDLE processHandle;
     OBJECT_ATTRIBUTES objectAttributes{};
     CLIENT_ID clientId{
-        .UniqueProcess = reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(pid)),
+        .UniqueProcess = (HANDLE)(std::uintptr_t)pid,
     };
     if (const NTSTATUS status{ sysOpenProcess(&processHandle, PROCESS_ALL_ACCESS, &objectAttributes, &clientId) }; status != STATUS_SUCCESS) {
-        std::println("[!] failed to open process [{}]", static_cast<std::uint32_t>(status));
+        std::println("[!] failed to open process [{}]", (unsigned)status);
         return EXIT_FAILURE;
     }
 
-    std::println("[+] open handle to process! [0x{:X}]", reinterpret_cast<std::uintptr_t>(processHandle));
+    std::println("[+] open handle to process! [0x{:X}]", (std::uintptr_t)processHandle);
     return EXIT_SUCCESS;
 }
 ```
