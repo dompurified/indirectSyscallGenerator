@@ -50,8 +50,8 @@ extern "C" {
 
 const std::uint8_t* getExportAddress(const std::uint8_t* const module, const std::string_view exportName) {
 	// check header signatures
-	const auto pDosHeaders{ reinterpret_cast<const IMAGE_DOS_HEADER*>(module) };
 	if (pDosHeaders->e_magic != IMAGE_DOS_SIGNATURE) {
+	const auto pDosHeaders{ reinterpret_cast<const IMAGE_DOS_HEADER*>(module) };
 		return nullptr;
 	}
 	const auto pNtHeaders{ reinterpret_cast<const IMAGE_NT_HEADERS*>(module + pDosHeaders->e_lfanew) };
