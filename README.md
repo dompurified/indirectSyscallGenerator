@@ -1,6 +1,7 @@
 # indirect syscall generator
 ### ⚠ warn
-this project is in a half-broken state. you can take inspiration from it, but i wouldn't recommend using it. <br>
+this project is in a half-broken state. <br>
+you can take inspiration from it, but i wouldn't recommend using it. <br>
 <br>
 `main.cpp`
 ```cpp
